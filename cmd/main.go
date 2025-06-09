@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,7 +12,8 @@ import (
 	"github.com/example/named-lock/internal/db"
 	"github.com/example/named-lock/internal/handler"
 	"github.com/example/named-lock/internal/service"
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/samber/do"
 )
 
@@ -39,24 +39,22 @@ func main() {
 	// ハンドラを登録
 	do.Provide(injector, handler.NewLockHandler)
 
-	// ルーターを作成
-	router := mux.NewRouter()
+	// Echoインスタンスを作成
+	e := echo.New()
+
+	// ミドルウェアを設定
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
 
 	// ハンドラを取得してルートを登録
 	lockHandler := do.MustInvoke[*handler.LockHandler](injector)
-	lockHandler.RegisterRoutes(router)
-
-	// サーバーを作成
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: router,
-	}
+	lockHandler.RegisterRoutes(e)
 
 	// サーバーを起動
 	go func() {
 		log.Printf("Server is running on http://localhost:8080")
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not listen on :8080: %v\n", err)
+		if err := e.Start(":8080"); err != nil {
+			log.Printf("Shutting down the server: %v", err)
 		}
 	}()
 
@@ -68,7 +66,7 @@ func main() {
 	// サーバーを停止
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	if err := e.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v\n", err)
 	}
 

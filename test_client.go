@@ -41,7 +41,7 @@ type Client struct {
 func NewClient(id int) *Client {
 	return &Client{
 		ID:     id,
-		Client: &http.Client{Timeout: 30 * time.Second}, // タイムアウトを30秒に延長
+		Client: &http.Client{Timeout: 30 * time.Minute}, // タイムアウトを30秒に延長
 	}
 }
 
