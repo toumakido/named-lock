@@ -16,7 +16,7 @@
 - Go言語
 - MySQL 8.0（Docker）
 - 依存性注入：github.com/samber/do
-- HTTPルーティング：github.com/gorilla/mux
+- HTTPルーティング：github.com/labstack/echo/v4
 - データベース：database/sql（標準ライブラリ）
 
 ## プロジェクト構成
@@ -59,7 +59,7 @@ go run cmd/main.go
 
 ### 3. テストクライアントの実行
 
-別のターミナルを開いて、以下のコマンドを実行します。引数にクライアントIDを指定できます。
+別のターミナルを開いて、以下のコマンドを実行します。引数にクライアントIDと並列数を指定できます。
 
 ```bash
 # クライアント1を実行
@@ -67,7 +67,12 @@ go run test_client.go 1
 
 # 別のターミナルでクライアント2を実行
 go run test_client.go 2
+
+# 複数のクライアントを並列実行（例: ID 1から始まる5つのクライアント）
+go run test_client.go 1 5
 ```
+
+並列実行の場合、第1引数は開始クライアントID、第2引数は並列数を指定します。各クライアントは独自のIDを持ち、並行してロックの取得・解放を試みます。
 
 ## APIエンドポイント
 
