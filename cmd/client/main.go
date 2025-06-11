@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/example/named-lock/internal/post"
 )
 
 func main() {
 	// コマンドライン引数の解析
-	startID, parallelCount, args := ParseCommonArgs()
+	startID, parallelCount, args := post.ParseCommonArgs()
 
 	// テストモードの選択（デフォルトは通常のロックテスト）
 	testMode := "normal"
@@ -20,7 +22,7 @@ func main() {
 	switch testMode {
 	case "normal", "n":
 		fmt.Println("実行モード: 通常のロック取得・解放テスト")
-		RunNormalLockTest(startID, parallelCount)
+		post.RunNormalLockTest(startID, parallelCount)
 	case "hold", "h":
 		fmt.Println("実行モード: ロック保持・解放テスト")
 		// 保持時間の取得（デフォルト: 5秒）
@@ -31,7 +33,7 @@ func main() {
 			}
 		}
 		fmt.Printf("保持時間: %d秒\n", holdDuration)
-		RunHoldReleaseLockTest(startID, parallelCount, holdDuration)
+		post.RunHoldReleaseLockTest(startID, parallelCount, holdDuration)
 	default:
 		fmt.Printf("未知のテストモード: %s\n", testMode)
 		fmt.Println("使用方法: go run ./client [開始ID] [並列数] [テストモード] [追加パラメータ...]")
