@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -40,7 +41,7 @@ type Client struct {
 func NewClient(id int) *Client {
 	return &Client{
 		ID:     id,
-		Client: &http.Client{Timeout: 10 * time.Second},
+		Client: &http.Client{Timeout: 30 * time.Minute}, // タイムアウトを30秒に延長
 	}
 }
 
@@ -65,7 +66,7 @@ func (c *Client) GetSessionID() (string, error) {
 	return sessionResp.SessionID, nil
 }
 
-// ロックを取得
+// ロックを取得（リトライ機能付き）
 func (c *Client) AcquireLock(lockName string, timeout int) (*LockResponse, error) {
 	reqBody, err := json.Marshal(map[string]interface{}{
 		"lock_name": lockName,
@@ -179,9 +180,9 @@ func (c *Client) Run(lockName string) {
 	fmt.Printf("Client %d [%.1fs]: Lock status after acquiring: %+v\n", c.ID, time.Since(startTime).Seconds(), status)
 
 	// ロックを保持する時間
-	holdTime := c.ID
+	holdTime := 0.5
 	if lockResp.Success {
-		fmt.Printf("Client %d [%.1fs]: Holding lock for %d seconds...\n", c.ID, time.Since(startTime).Seconds(), holdTime)
+		fmt.Printf("Client %d [%.1fs]: Holding lock for %v seconds...\n", c.ID, time.Since(startTime).Seconds(), holdTime)
 		time.Sleep(time.Duration(holdTime) * time.Second)
 	}
 
@@ -203,19 +204,50 @@ func (c *Client) Run(lockName string) {
 }
 
 func main() {
-	// コマンドライン引数からクライアントIDを取得
-	clientID := 1
+	// コマンドライン引数からクライアントIDと並列数を取得
+	startID := 1
+	parallelCount := 1
+
+	// 第1引数: 開始クライアントID
 	if len(os.Args) > 1 {
 		id, err := strconv.Atoi(os.Args[1])
 		if err == nil {
-			clientID = id
+			startID = id
+		}
+	}
+
+	// 第2引数: 並列数
+	if len(os.Args) > 2 {
+		count, err := strconv.Atoi(os.Args[2])
+		if err == nil && count > 0 {
+			parallelCount = count
 		}
 	}
 
 	// ロック名
 	lockName := "test_lock"
 
-	// クライアントを作成して実行
-	client := NewClient(clientID)
-	client.Run(lockName)
+	// 並列実行のための同期グループ
+	var wg sync.WaitGroup
+
+	fmt.Printf("Starting %d clients in parallel (IDs: %d-%d)\n",
+		parallelCount, startID, startID+parallelCount-1)
+
+	// 指定された並列数だけクライアントを作成して実行
+	for i := 0; i < parallelCount; i++ {
+		wg.Add(1)
+
+		clientID := startID + i
+
+		// goroutineで並列実行
+		go func(id int) {
+			defer wg.Done()
+			client := NewClient(id)
+			client.Run(lockName)
+		}(clientID)
+	}
+
+	// すべてのクライアントの完了を待機
+	wg.Wait()
+	fmt.Println("All clients completed")
 }

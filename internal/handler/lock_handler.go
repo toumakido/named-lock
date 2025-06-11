@@ -1,11 +1,10 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/example/named-lock/internal/service"
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
 	"github.com/samber/do"
 )
 
@@ -36,25 +35,22 @@ type LockResponse struct {
 }
 
 // AcquireLock はロックを取得するハンドラ
-func (h *LockHandler) AcquireLock(w http.ResponseWriter, r *http.Request) {
+func (h *LockHandler) AcquireLock(c echo.Context) error {
 	var req AcquireLockRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 	}
 
 	// 現在のセッションIDを取得
 	currentSessionID, err := h.lockService.GetCurrentSessionID()
 	if err != nil {
-		http.Error(w, "Failed to get current session ID", http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID"})
 	}
 
 	// ロックを取得
 	success, sessionID, err := h.lockService.AcquireLock(req.LockName, req.Timeout)
 	if err != nil {
-		http.Error(w, "Failed to acquire lock: "+err.Error(), http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to acquire lock: " + err.Error()})
 	}
 
 	// レスポンスを作成
@@ -69,8 +65,7 @@ func (h *LockHandler) AcquireLock(w http.ResponseWriter, r *http.Request) {
 		// ロックが取得できなかった場合、所有者を確認
 		hasOwner, ownerID, err := h.lockService.GetLockOwner(req.LockName)
 		if err != nil {
-			http.Error(w, "Failed to get lock owner: "+err.Error(), http.StatusInternalServerError)
-			return
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get lock owner: " + err.Error()})
 		}
 
 		if hasOwner {
@@ -80,27 +75,23 @@ func (h *LockHandler) AcquireLock(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	return c.JSON(http.StatusOK, response)
 }
 
 // ReleaseLock はロックを解放するハンドラ
-func (h *LockHandler) ReleaseLock(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	lockName := vars["lockName"]
+func (h *LockHandler) ReleaseLock(c echo.Context) error {
+	lockName := c.Param("lockName")
 
 	// 現在のセッションIDを取得
 	currentSessionID, err := h.lockService.GetCurrentSessionID()
 	if err != nil {
-		http.Error(w, "Failed to get current session ID", http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID"})
 	}
 
 	// ロックを解放
 	success, err := h.lockService.ReleaseLock(lockName)
 	if err != nil {
-		http.Error(w, "Failed to release lock: "+err.Error(), http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to release lock: " + err.Error()})
 	}
 
 	// レスポンスを作成
@@ -115,34 +106,29 @@ func (h *LockHandler) ReleaseLock(w http.ResponseWriter, r *http.Request) {
 		response.Message = "Failed to release lock. It may be held by another session or not exist."
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	return c.JSON(http.StatusOK, response)
 }
 
 // GetLockStatus はロックの状態を取得するハンドラ
-func (h *LockHandler) GetLockStatus(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	lockName := vars["lockName"]
+func (h *LockHandler) GetLockStatus(c echo.Context) error {
+	lockName := c.Param("lockName")
 
 	// 現在のセッションIDを取得
 	currentSessionID, err := h.lockService.GetCurrentSessionID()
 	if err != nil {
-		http.Error(w, "Failed to get current session ID", http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID"})
 	}
 
 	// ロックの所有者を取得
 	hasOwner, ownerID, err := h.lockService.GetLockOwner(lockName)
 	if err != nil {
-		http.Error(w, "Failed to get lock owner: "+err.Error(), http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get lock owner: " + err.Error()})
 	}
 
 	// ロックが解放されているかを確認（情報としてログに出力するなど必要に応じて使用）
 	_, err = h.lockService.IsLockFree(lockName)
 	if err != nil {
-		http.Error(w, "Failed to check if lock is free: "+err.Error(), http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to check if lock is free: " + err.Error()})
 	}
 
 	// レスポンスを作成
@@ -165,17 +151,15 @@ func (h *LockHandler) GetLockStatus(w http.ResponseWriter, r *http.Request) {
 		response.IsOwnedByCurrentSession = ownerID == currentSessionID
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	return c.JSON(http.StatusOK, response)
 }
 
 // GetCurrentSession は現在のセッションIDを取得するハンドラ
-func (h *LockHandler) GetCurrentSession(w http.ResponseWriter, r *http.Request) {
+func (h *LockHandler) GetCurrentSession(c echo.Context) error {
 	// 現在のセッションIDを取得
 	sessionID, err := h.lockService.GetCurrentSessionID()
 	if err != nil {
-		http.Error(w, "Failed to get current session ID: "+err.Error(), http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID: " + err.Error()})
 	}
 
 	// レスポンスを作成
@@ -187,14 +171,13 @@ func (h *LockHandler) GetCurrentSession(w http.ResponseWriter, r *http.Request) 
 		SessionID: sessionID,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	return c.JSON(http.StatusOK, response)
 }
 
 // RegisterRoutes はルートを登録する
-func (h *LockHandler) RegisterRoutes(router *mux.Router) {
-	router.HandleFunc("/api/locks", h.AcquireLock).Methods("POST")
-	router.HandleFunc("/api/locks/{lockName}", h.ReleaseLock).Methods("DELETE")
-	router.HandleFunc("/api/locks/{lockName}", h.GetLockStatus).Methods("GET")
-	router.HandleFunc("/api/session", h.GetCurrentSession).Methods("GET")
+func (h *LockHandler) RegisterRoutes(e *echo.Echo) {
+	e.POST("/api/locks", h.AcquireLock)
+	e.DELETE("/api/locks/:lockName", h.ReleaseLock)
+	e.GET("/api/locks/:lockName", h.GetLockStatus)
+	e.GET("/api/session", h.GetCurrentSession)
 }
