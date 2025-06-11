@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/example/named-lock/internal/db"
 	"github.com/samber/do"
@@ -117,4 +118,33 @@ func (s *LockService) GetCurrentSessionID() (string, error) {
 		return "", fmt.Errorf("failed to get connection id: %w", err)
 	}
 	return fmt.Sprintf("%d", sessionID), nil
+}
+
+// AcquireHoldReleaseLock はロックを取得し、指定された時間保持した後、解放する
+func (s *LockService) AcquireHoldReleaseLock(lockName string, timeout int, holdDuration int) (bool, string, error) {
+	// ロックを取得
+	acquired, sessionID, err := s.AcquireLock(lockName, timeout)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to acquire lock: %w", err)
+	}
+
+	// ロック取得に失敗した場合
+	if !acquired {
+		return false, "", nil
+	}
+
+	// 指定された時間だけ待機
+	time.Sleep(time.Duration(holdDuration) * time.Second)
+
+	// ロックを解放
+	released, err := s.ReleaseLock(lockName)
+	if err != nil {
+		return true, sessionID, fmt.Errorf("acquired lock but failed to release: %w", err)
+	}
+
+	if !released {
+		return true, sessionID, fmt.Errorf("acquired lock but failed to release: unknown error")
+	}
+
+	return true, sessionID, nil
 }

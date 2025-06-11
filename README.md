@@ -23,6 +23,11 @@
 
 ```
 named-lock/
+├── client/
+│   ├── common.go              # クライアント共通処理
+│   ├── main.go                # クライアントのメインエントリーポイント
+│   ├── test_client.go         # テスト用クライアント
+│   └── test_client_hold_release.go # ホールド・リリーステスト用クライアント
 ├── cmd/
 │   └── main.go                # アプリケーションのエントリーポイント
 ├── docker/
@@ -39,7 +44,6 @@ named-lock/
 │   └── service/
 │       └── lock_service.go    # ビジネスロジック
 ├── docker-compose.yml         # Docker Compose設定
-├── test_client.go             # テスト用クライアント
 └── README.md                  # このファイル
 ```
 
@@ -48,7 +52,7 @@ named-lock/
 ### 1. MySQLコンテナの起動
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 2. APIサーバーの起動
@@ -63,16 +67,24 @@ go run cmd/main.go
 
 ```bash
 # クライアント1を実行
-go run test_client.go 1
+go run client/test_client.go 1
 
 # 別のターミナルでクライアント2を実行
-go run test_client.go 2
+go run client/test_client.go 2
 
 # 複数のクライアントを並列実行（例: ID 1から始まる5つのクライアント）
-go run test_client.go 1 5
+go run client/test_client.go 1 5
+
+# メインクライアントの実行
+go run client/main.go
+
+# ホールド・リリーステスト用クライアントの実行
+go run client/test_client_hold_release.go
 ```
 
 並列実行の場合、第1引数は開始クライアントID、第2引数は並列数を指定します。各クライアントは独自のIDを持ち、並行してロックの取得・解放を試みます。
+
+`test_client_hold_release.go`は、ロックの取得と解放を特定のパターンでテストするための専用クライアントです。
 
 ## APIエンドポイント
 
