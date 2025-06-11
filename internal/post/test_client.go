@@ -1,4 +1,4 @@
-package main
+package post
 
 import (
 	"bytes"
@@ -6,65 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strconv"
-	"sync"
 	"time"
 )
-
-// APIレスポンスの構造体
-type SessionResponse struct {
-	SessionID string `json:"session_id"`
-}
-
-type LockResponse struct {
-	Success   bool   `json:"success"`
-	SessionID string `json:"session_id,omitempty"`
-	Message   string `json:"message,omitempty"`
-}
-
-type LockStatusResponse struct {
-	LockName                string `json:"lock_name"`
-	IsLocked                bool   `json:"is_locked"`
-	OwnerSessionID          string `json:"owner_session_id,omitempty"`
-	CurrentSessionID        string `json:"current_session_id"`
-	IsOwnedByCurrentSession bool   `json:"is_owned_by_current_session"`
-}
-
-// クライアント構造体
-type Client struct {
-	ID     int
-	Client *http.Client
-}
-
-// 新しいクライアントを作成
-func NewClient(id int) *Client {
-	return &Client{
-		ID:     id,
-		Client: &http.Client{Timeout: 30 * time.Minute}, // タイムアウトを30秒に延長
-	}
-}
-
-// セッションIDを取得
-func (c *Client) GetSessionID() (string, error) {
-	resp, err := c.Client.Get("http://localhost:8080/api/session")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var sessionResp SessionResponse
-	if err := json.Unmarshal(body, &sessionResp); err != nil {
-		return "", err
-	}
-
-	return sessionResp.SessionID, nil
-}
 
 // ロックを取得（リトライ機能付き）
 func (c *Client) AcquireLock(lockName string, timeout int) (*LockResponse, error) {
@@ -121,29 +64,8 @@ func (c *Client) ReleaseLock(lockName string) (*LockResponse, error) {
 	return &lockResp, nil
 }
 
-// ロックの状態を取得
-func (c *Client) GetLockStatus(lockName string) (*LockStatusResponse, error) {
-	resp, err := c.Client.Get("http://localhost:8080/api/locks/" + lockName)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var statusResp LockStatusResponse
-	if err := json.Unmarshal(body, &statusResp); err != nil {
-		return nil, err
-	}
-
-	return &statusResp, nil
-}
-
-// クライアントの実行
-func (c *Client) Run(lockName string) {
+// 通常のロック取得・解放テスト
+func RunNormalTest(c *Client, lockName string, args ...interface{}) {
 	// 実行開始時間を記録
 	startTime := time.Now()
 
@@ -203,51 +125,8 @@ func (c *Client) Run(lockName string) {
 	fmt.Printf("Client %d [%.1fs]: Lock status after releasing: %+v\n", c.ID, time.Since(startTime).Seconds(), status)
 }
 
-func main() {
-	// コマンドライン引数からクライアントIDと並列数を取得
-	startID := 1
-	parallelCount := 1
-
-	// 第1引数: 開始クライアントID
-	if len(os.Args) > 1 {
-		id, err := strconv.Atoi(os.Args[1])
-		if err == nil {
-			startID = id
-		}
-	}
-
-	// 第2引数: 並列数
-	if len(os.Args) > 2 {
-		count, err := strconv.Atoi(os.Args[2])
-		if err == nil && count > 0 {
-			parallelCount = count
-		}
-	}
-
-	// ロック名
+// 通常のロックテストを実行する関数
+func RunNormalLockTest(startID int, parallelCount int) {
 	lockName := "test_lock"
-
-	// 並列実行のための同期グループ
-	var wg sync.WaitGroup
-
-	fmt.Printf("Starting %d clients in parallel (IDs: %d-%d)\n",
-		parallelCount, startID, startID+parallelCount-1)
-
-	// 指定された並列数だけクライアントを作成して実行
-	for i := 0; i < parallelCount; i++ {
-		wg.Add(1)
-
-		clientID := startID + i
-
-		// goroutineで並列実行
-		go func(id int) {
-			defer wg.Done()
-			client := NewClient(id)
-			client.Run(lockName)
-		}(clientID)
-	}
-
-	// すべてのクライアントの完了を待機
-	wg.Wait()
-	fmt.Println("All clients completed")
+	RunParallel(startID, parallelCount, lockName, RunNormalTest)
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/example/named-lock/internal/service"
 	"github.com/labstack/echo/v4"
@@ -25,6 +26,13 @@ func NewLockHandler(injector *do.Injector) (*LockHandler, error) {
 type AcquireLockRequest struct {
 	LockName string `json:"lock_name"`
 	Timeout  int    `json:"timeout"`
+}
+
+// AcquireHoldReleaseRequest はロック取得・保持・解放リクエストの構造体
+type AcquireHoldReleaseRequest struct {
+	LockName     string `json:"lock_name"`
+	Timeout      int    `json:"timeout"`
+	HoldDuration int    `json:"hold_duration"`
 }
 
 // LockResponse はロック操作レスポンスの構造体
@@ -174,10 +182,55 @@ func (h *LockHandler) GetCurrentSession(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
+// AcquireHoldReleaseLock はロックを取得し、指定された時間保持した後、解放するハンドラ
+func (h *LockHandler) AcquireHoldReleaseLock(c echo.Context) error {
+	var req AcquireHoldReleaseRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	}
+
+	// 現在のセッションIDを取得
+	currentSessionID, err := h.lockService.GetCurrentSessionID()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID"})
+	}
+
+	// ロックを取得し、保持し、解放する
+	success, sessionID, err := h.lockService.AcquireHoldReleaseLock(req.LockName, req.Timeout, req.HoldDuration)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Operation failed: " + err.Error()})
+	}
+
+	// レスポンスを作成
+	response := LockResponse{
+		Success:   success,
+		SessionID: sessionID,
+	}
+
+	if success {
+		response.Message = "Lock acquired, held for " + strconv.Itoa(req.HoldDuration) + " seconds, and released successfully. Current connection ID: " + currentSessionID
+	} else {
+		// ロックが取得できなかった場合、所有者を確認
+		hasOwner, ownerID, err := h.lockService.GetLockOwner(req.LockName)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get lock owner: " + err.Error()})
+		}
+
+		if hasOwner {
+			response.Message = "Failed to acquire lock. It is already held by session ID: " + ownerID
+		} else {
+			response.Message = "Failed to acquire lock"
+		}
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
 // RegisterRoutes はルートを登録する
 func (h *LockHandler) RegisterRoutes(e *echo.Echo) {
 	e.POST("/api/locks", h.AcquireLock)
 	e.DELETE("/api/locks/:lockName", h.ReleaseLock)
 	e.GET("/api/locks/:lockName", h.GetLockStatus)
 	e.GET("/api/session", h.GetCurrentSession)
+	e.POST("/api/locks/hold-and-release", h.AcquireHoldReleaseLock)
 }
