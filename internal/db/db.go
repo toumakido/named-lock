@@ -18,7 +18,6 @@ type DB struct {
 // Tx はトランザクションを表す構造体
 type Tx struct {
 	*sql.Tx
-	db *DB // 元のDBへの参照を保持
 }
 
 // NewDB は新しいDBインスタンスを作成する
@@ -122,26 +121,40 @@ func (db *DB) BeginTx(ctx context.Context) (*Tx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	return &Tx{Tx: tx, db: db}, nil
+	return &Tx{Tx: tx}, nil
 }
 
-// GetNamedLock はトランザクション内で名前付きロックを取得する
-// トランザクションを開始しても同じ接続（セッション）が使用されるため、
-// 元のDBオブジェクトを使用してロックを取得する
+// GetNamedLock は名前付きロックを取得する
+// lockName: ロック名
+// timeout: タイムアウト（秒）
+// 戻り値: 1=ロック取得成功, 0=ロック取得失敗, error=エラー
 func (tx *Tx) GetNamedLock(lockName string, timeout int) (int, error) {
-	return tx.db.GetNamedLock(lockName, timeout)
+	var result sql.NullInt64
+	err := tx.QueryRow("SELECT GET_LOCK(?, ?)", lockName, timeout).Scan(&result)
+	if err != nil {
+		return -1, fmt.Errorf("failed to get lock: %w", err)
+	}
+	return int(result.Int64), nil
 }
 
-// ReleaseNamedLock はトランザクション内で名前付きロックを解放する
-// トランザクションを開始しても同じ接続（セッション）が使用されるため、
-// 元のDBオブジェクトを使用してロックを解放する
+// ReleaseNamedLock は名前付きロックを解放する
+// lockName: ロック名
+// 戻り値: 1=ロック解放成功, 0=ロックが存在しないか他のセッションが所有, error=エラー
 func (tx *Tx) ReleaseNamedLock(lockName string) (int, error) {
-	return tx.db.ReleaseNamedLock(lockName)
+	var result sql.NullInt64
+	err := tx.QueryRow("SELECT RELEASE_LOCK(?)", lockName).Scan(&result)
+	if err != nil {
+		return -1, fmt.Errorf("failed to release lock: %w", err)
+	}
+	return int(result.Int64), nil
 }
 
-// GetCurrentConnectionID はトランザクション内で現在の接続のセッションIDを取得する
-// トランザクションを開始しても同じ接続（セッション）が使用されるため、
-// 元のDBオブジェクトを使用してセッションIDを取得する
+// GetCurrentConnectionID は現在の接続のセッションIDを取得する
 func (tx *Tx) GetCurrentConnectionID() (int64, error) {
-	return tx.db.GetCurrentConnectionID()
+	var id int64
+	err := tx.QueryRow("SELECT CONNECTION_ID()").Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get connection id: %w", err)
+	}
+	return id, nil
 }
