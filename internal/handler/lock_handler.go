@@ -251,17 +251,6 @@ func (h *LockHandler) AcquireHoldReleaseLock(c echo.Context) error {
 		return c.JSON(http.StatusOK, response)
 	}
 
-	// 現在のセッションIDを取得
-	// currentSessionID, err := h.lockService.GetCurrentSessionID()
-	// if err != nil {
-	// 	// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
-	// 	response := LockResponse{
-	// 		Success: false,
-	// 		Message: "Failed to get current session ID: " + err.Error(),
-	// 	}
-	// 	return c.JSON(http.StatusOK, response)
-	// }
-
 	// ロックを取得し、保持し、解放する
 	sessionID, err := h.lockService.AcquireHoldReleaseLock(c.Request().Context(), req.LockName, req.Timeout, req.HoldDuration)
 	if err != nil {
@@ -280,28 +269,6 @@ func (h *LockHandler) AcquireHoldReleaseLock(c echo.Context) error {
 		Success:   success,
 		SessionID: sessionID,
 	}
-
-	// if success {
-	// 	response.Message = "Lock acquired, held for " + strconv.Itoa(req.HoldDuration) + " seconds, and released successfully. Current connection ID: " + currentSessionID
-	// } else {
-	// 	// ロックが取得できなかった場合、所有者を確認
-	// 	hasOwner, ownerID, err := h.lockService.GetLockOwner(req.LockName)
-	// 	if err != nil {
-	// 		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
-	// 		response := LockResponse{
-	// 			Success:   false,
-	// 			SessionID: sessionID,
-	// 			Message:   "Failed to get lock owner: " + err.Error(),
-	// 		}
-	// 		return c.JSON(http.StatusOK, response)
-	// 	}
-
-	// 	if hasOwner {
-	// 		response.Message = "Failed to acquire lock. It is already held by session ID: " + ownerID
-	// 	} else {
-	// 		response.Message = "Failed to acquire lock"
-	// 	}
-	// }
 
 	return c.JSON(http.StatusOK, response)
 }
