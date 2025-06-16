@@ -66,30 +66,6 @@ func (db *DB) ReleaseNamedLock(lockName string) (int, error) {
 	return int(result.Int64), nil
 }
 
-// IsFreeLock はロックが解放されているかを確認する
-// lockName: ロック名
-// 戻り値: 1=ロックは解放されている, 0=ロックは取得されている, NULL=ロックが存在しない, error=エラー
-func (db *DB) IsFreeLock(lockName string) (sql.NullInt64, error) {
-	var result sql.NullInt64
-	err := db.QueryRow("SELECT IS_FREE_LOCK(?)", lockName).Scan(&result)
-	if err != nil {
-		return sql.NullInt64{}, fmt.Errorf("failed to check if lock is free: %w", err)
-	}
-	return result, nil
-}
-
-// GetLockOwner はロックを所有しているセッションIDを取得する
-// lockName: ロック名
-// 戻り値: セッションID（ロックが存在しない場合はNULL）, error=エラー
-func (db *DB) GetLockOwner(lockName string) (sql.NullInt64, error) {
-	var result sql.NullInt64
-	err := db.QueryRow("SELECT IS_USED_LOCK(?)", lockName).Scan(&result)
-	if err != nil {
-		return sql.NullInt64{}, fmt.Errorf("failed to get lock owner: %w", err)
-	}
-	return result, nil
-}
-
 // GetCurrentConnectionID は現在の接続のセッションIDを取得する
 func (db *DB) GetCurrentConnectionID() (int64, error) {
 	var id int64
@@ -98,20 +74,6 @@ func (db *DB) GetCurrentConnectionID() (int64, error) {
 		return 0, fmt.Errorf("failed to get connection id: %w", err)
 	}
 	return id, nil
-}
-
-// SaveLockHistory はロック取得履歴を保存する（オプション機能）
-func (db *DB) SaveLockHistory(lockName string, sessionID string, status string) error {
-	var query string
-	if status == "acquired" {
-		query = "INSERT INTO lock_history (lock_name, session_id, status) VALUES (?, ?, ?)"
-		_, err := db.Exec(query, lockName, sessionID, status)
-		return err
-	} else {
-		query = "UPDATE lock_history SET released_at = CURRENT_TIMESTAMP, status = ? WHERE lock_name = ? AND session_id = ? AND status = 'acquired'"
-		_, err := db.Exec(query, status, lockName, sessionID)
-		return err
-	}
 }
 
 // BeginTx はトランザクションを開始する

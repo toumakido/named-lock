@@ -20,9 +20,6 @@ func main() {
 
 	// テストモードに応じて処理を分岐
 	switch testMode {
-	case "normal", "n":
-		fmt.Println("実行モード: 通常のロック取得・解放テスト")
-		post.RunNormalLockTest(startID, parallelCount)
 	case "hold", "h":
 		fmt.Println("実行モード: ロック保持・解放テスト")
 		// 保持時間の取得（デフォルト: 5秒）
