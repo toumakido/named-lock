@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/example/named-lock/internal/service"
 	"github.com/labstack/echo/v4"
@@ -46,19 +45,35 @@ type LockResponse struct {
 func (h *LockHandler) AcquireLock(c echo.Context) error {
 	var req AcquireLockRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success: false,
+			Message: "Invalid request body: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
 	}
 
 	// 現在のセッションIDを取得
 	currentSessionID, err := h.lockService.GetCurrentSessionID()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID"})
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success: false,
+			Message: "Failed to get current session ID: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
 	}
 
 	// ロックを取得
 	success, sessionID, err := h.lockService.AcquireLock(req.LockName, req.Timeout)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to acquire lock: " + err.Error()})
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success:   false,
+			SessionID: "",
+			Message:   "Failed to acquire lock: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
 	}
 
 	// レスポンスを作成
@@ -73,7 +88,13 @@ func (h *LockHandler) AcquireLock(c echo.Context) error {
 		// ロックが取得できなかった場合、所有者を確認
 		hasOwner, ownerID, err := h.lockService.GetLockOwner(req.LockName)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get lock owner: " + err.Error()})
+			// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+			response := LockResponse{
+				Success:   false,
+				SessionID: sessionID,
+				Message:   "Failed to get lock owner: " + err.Error(),
+			}
+			return c.JSON(http.StatusOK, response)
 		}
 
 		if hasOwner {
@@ -93,13 +114,24 @@ func (h *LockHandler) ReleaseLock(c echo.Context) error {
 	// 現在のセッションIDを取得
 	currentSessionID, err := h.lockService.GetCurrentSessionID()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID"})
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success: false,
+			Message: "Failed to get current session ID: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
 	}
 
 	// ロックを解放
 	success, err := h.lockService.ReleaseLock(lockName)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to release lock: " + err.Error()})
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success:   false,
+			SessionID: currentSessionID,
+			Message:   "Failed to release lock: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
 	}
 
 	// レスポンスを作成
@@ -124,19 +156,40 @@ func (h *LockHandler) GetLockStatus(c echo.Context) error {
 	// 現在のセッションIDを取得
 	currentSessionID, err := h.lockService.GetCurrentSessionID()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID"})
+		// エラーが発生した場合でも、適切な形式でレスポンスを返す
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"lock_name": lockName,
+			"is_locked": false,
+			"error":     "Failed to get current session ID: " + err.Error(),
+			"success":   false,
+		})
 	}
 
 	// ロックの所有者を取得
 	hasOwner, ownerID, err := h.lockService.GetLockOwner(lockName)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get lock owner: " + err.Error()})
+		// エラーが発生した場合でも、適切な形式でレスポンスを返す
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"lock_name":          lockName,
+			"is_locked":          false,
+			"current_session_id": currentSessionID,
+			"error":              "Failed to get lock owner: " + err.Error(),
+			"success":            false,
+		})
 	}
 
 	// ロックが解放されているかを確認（情報としてログに出力するなど必要に応じて使用）
 	_, err = h.lockService.IsLockFree(lockName)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to check if lock is free: " + err.Error()})
+		// エラーが発生した場合でも、適切な形式でレスポンスを返す
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"lock_name":          lockName,
+			"is_locked":          hasOwner,
+			"owner_session_id":   ownerID,
+			"current_session_id": currentSessionID,
+			"error":              "Failed to check if lock is free: " + err.Error(),
+			"success":            false,
+		})
 	}
 
 	// レスポンスを作成
@@ -167,7 +220,11 @@ func (h *LockHandler) GetCurrentSession(c echo.Context) error {
 	// 現在のセッションIDを取得
 	sessionID, err := h.lockService.GetCurrentSessionID()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID: " + err.Error()})
+		// エラーが発生した場合でも、適切な形式でレスポンスを返す
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"error":   "Failed to get current session ID: " + err.Error(),
+			"success": false,
+		})
 	}
 
 	// レスポンスを作成
@@ -186,20 +243,37 @@ func (h *LockHandler) GetCurrentSession(c echo.Context) error {
 func (h *LockHandler) AcquireHoldReleaseLock(c echo.Context) error {
 	var req AcquireHoldReleaseRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success: false,
+			Message: "Invalid request body: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
 	}
 
 	// 現在のセッションIDを取得
-	currentSessionID, err := h.lockService.GetCurrentSessionID()
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get current session ID"})
-	}
+	// currentSessionID, err := h.lockService.GetCurrentSessionID()
+	// if err != nil {
+	// 	// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+	// 	response := LockResponse{
+	// 		Success: false,
+	// 		Message: "Failed to get current session ID: " + err.Error(),
+	// 	}
+	// 	return c.JSON(http.StatusOK, response)
+	// }
 
 	// ロックを取得し、保持し、解放する
-	success, sessionID, err := h.lockService.AcquireHoldReleaseLock(req.LockName, req.Timeout, req.HoldDuration)
+	sessionID, err := h.lockService.AcquireHoldReleaseLock(c.Request().Context(), req.LockName, req.Timeout, req.HoldDuration)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Operation failed: " + err.Error()})
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success:   false,
+			SessionID: sessionID, // エラー時でもセッションIDがある場合は返す
+			Message:   "Operation failed: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
 	}
+	success := true
 
 	// レスポンスを作成
 	response := LockResponse{
@@ -207,21 +281,27 @@ func (h *LockHandler) AcquireHoldReleaseLock(c echo.Context) error {
 		SessionID: sessionID,
 	}
 
-	if success {
-		response.Message = "Lock acquired, held for " + strconv.Itoa(req.HoldDuration) + " seconds, and released successfully. Current connection ID: " + currentSessionID
-	} else {
-		// ロックが取得できなかった場合、所有者を確認
-		hasOwner, ownerID, err := h.lockService.GetLockOwner(req.LockName)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to get lock owner: " + err.Error()})
-		}
+	// if success {
+	// 	response.Message = "Lock acquired, held for " + strconv.Itoa(req.HoldDuration) + " seconds, and released successfully. Current connection ID: " + currentSessionID
+	// } else {
+	// 	// ロックが取得できなかった場合、所有者を確認
+	// 	hasOwner, ownerID, err := h.lockService.GetLockOwner(req.LockName)
+	// 	if err != nil {
+	// 		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+	// 		response := LockResponse{
+	// 			Success:   false,
+	// 			SessionID: sessionID,
+	// 			Message:   "Failed to get lock owner: " + err.Error(),
+	// 		}
+	// 		return c.JSON(http.StatusOK, response)
+	// 	}
 
-		if hasOwner {
-			response.Message = "Failed to acquire lock. It is already held by session ID: " + ownerID
-		} else {
-			response.Message = "Failed to acquire lock"
-		}
-	}
+	// 	if hasOwner {
+	// 		response.Message = "Failed to acquire lock. It is already held by session ID: " + ownerID
+	// 	} else {
+	// 		response.Message = "Failed to acquire lock"
+	// 	}
+	// }
 
 	return c.JSON(http.StatusOK, response)
 }

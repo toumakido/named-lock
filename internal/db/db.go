@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -12,6 +13,12 @@ import (
 // DB はデータベース操作を行うための構造体
 type DB struct {
 	*sql.DB
+}
+
+// Tx はトランザクションを表す構造体
+type Tx struct {
+	*sql.Tx
+	db *DB // 元のDBへの参照を保持
 }
 
 // NewDB は新しいDBインスタンスを作成する
@@ -106,4 +113,35 @@ func (db *DB) SaveLockHistory(lockName string, sessionID string, status string) 
 		_, err := db.Exec(query, status, lockName, sessionID)
 		return err
 	}
+}
+
+// BeginTx はトランザクションを開始する
+// トランザクションを開始しても同じ接続（セッション）が使用されるため、セッションIDは変わらない
+func (db *DB) BeginTx(ctx context.Context) (*Tx, error) {
+	tx, err := db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	return &Tx{Tx: tx, db: db}, nil
+}
+
+// GetNamedLock はトランザクション内で名前付きロックを取得する
+// トランザクションを開始しても同じ接続（セッション）が使用されるため、
+// 元のDBオブジェクトを使用してロックを取得する
+func (tx *Tx) GetNamedLock(lockName string, timeout int) (int, error) {
+	return tx.db.GetNamedLock(lockName, timeout)
+}
+
+// ReleaseNamedLock はトランザクション内で名前付きロックを解放する
+// トランザクションを開始しても同じ接続（セッション）が使用されるため、
+// 元のDBオブジェクトを使用してロックを解放する
+func (tx *Tx) ReleaseNamedLock(lockName string) (int, error) {
+	return tx.db.ReleaseNamedLock(lockName)
+}
+
+// GetCurrentConnectionID はトランザクション内で現在の接続のセッションIDを取得する
+// トランザクションを開始しても同じ接続（セッション）が使用されるため、
+// 元のDBオブジェクトを使用してセッションIDを取得する
+func (tx *Tx) GetCurrentConnectionID() (int64, error) {
+	return tx.db.GetCurrentConnectionID()
 }

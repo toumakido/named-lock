@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/example/named-lock/internal/db"
+	"github.com/google/uuid"
 	"github.com/samber/do"
 )
 
@@ -47,7 +49,7 @@ func (s *LockService) AcquireLock(lockName string, timeout int) (bool, string, e
 		return true, fmt.Sprintf("%d", sessionID), nil
 	}
 
-	return false, "", nil
+	return false, "", fmt.Errorf("failed to acquire lock: lock is already held by another session")
 }
 
 // ReleaseLock はロックを解放する
@@ -75,7 +77,7 @@ func (s *LockService) ReleaseLock(lockName string) (bool, error) {
 		return true, nil
 	}
 
-	return false, nil
+	return false, fmt.Errorf("failed to release lock: lock is not held by this session or does not exist")
 }
 
 // GetLockOwner はロックの所有者を取得する
@@ -121,30 +123,62 @@ func (s *LockService) GetCurrentSessionID() (string, error) {
 }
 
 // AcquireHoldReleaseLock はロックを取得し、指定された時間保持した後、解放する
-func (s *LockService) AcquireHoldReleaseLock(lockName string, timeout int, holdDuration int) (bool, string, error) {
-	// ロックを取得
-	acquired, sessionID, err := s.AcquireLock(lockName, timeout)
+// ロックの取得と解放の間にトランザクションを張る
+func (s *LockService) AcquireHoldReleaseLock(ctx context.Context, lockName string, timeout int, holdDuration int) (string, error) {
+	id := uuid.New().String()
+
+	// トランザクションを開始
+	tx, err := s.db.BeginTx(ctx)
 	if err != nil {
-		return false, "", fmt.Errorf("failed to acquire lock: %w", err)
+		return "", fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	sID, err := tx.GetCurrentConnectionID()
+	if err != nil {
+		return "", fmt.Errorf("failed to get connection id: %w", err)
+	}
+	fmt.Printf("[%s]before lock session ID:%d", id, sID)
+	sessionID := fmt.Sprintf("%d", sID)
+
+	// ロックを取得
+	result, err := tx.GetNamedLock(lockName, timeout)
+	if err != nil {
+		return sessionID, fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	// ロック取得に失敗した場合
+	if result != 1 {
+		return sessionID, fmt.Errorf("failed to acquire lock: result %d", result)
 	}
 
-	// ロック取得に失敗した場合
-	if !acquired {
-		return false, "", nil
+	sID, err = tx.GetCurrentConnectionID()
+	if err != nil {
+		return "", fmt.Errorf("failed to get connection id: %w", err)
 	}
+	fmt.Printf("[%s]after lock session ID:%d", id, sID)
 
 	// 指定された時間だけ待機
 	time.Sleep(time.Duration(holdDuration) * time.Second)
 
-	// ロックを解放
-	released, err := s.ReleaseLock(lockName)
+	sID, err = tx.GetCurrentConnectionID()
 	if err != nil {
-		return true, sessionID, fmt.Errorf("acquired lock but failed to release: %w", err)
+		return "", fmt.Errorf("failed to get connection id: %w", err)
+	}
+	fmt.Printf("[%s]before release session ID:%d", id, sID)
+
+	// ロックを解放
+	result, err = tx.ReleaseNamedLock(lockName)
+	if err != nil {
+		return sessionID, fmt.Errorf("failed to release: %w", err)
+	}
+	if result != 1 {
+		return sessionID, fmt.Errorf("failed to release: result %d", result)
 	}
 
-	if !released {
-		return true, sessionID, fmt.Errorf("acquired lock but failed to release: unknown error")
+	// トランザクションをコミット
+	if err := tx.Commit(); err != nil {
+		return sessionID, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return true, sessionID, nil
+	return sessionID, nil
 }

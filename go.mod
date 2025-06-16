@@ -4,6 +4,7 @@ go 1.24.2
 
 require (
 	github.com/go-sql-driver/mysql v1.9.2
+	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/samber/do v1.6.0
 )
