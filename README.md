@@ -7,9 +7,6 @@
 - MySQLの名前付きロック（GET_LOCK, RELEASE_LOCK）を使用したロック機構
 - 複数のクライアントからのリクエストでロックの競合を確認
 - 各セッションのセッションID（CONNECTION_ID）の取得
-- ロックの所有者（IS_USED_LOCK）の確認
-- ロックの状態（IS_FREE_LOCK）の確認
-- ロック履歴の記録
 - ロックの取得・保持・解放を一連の操作として実行する機能
 
 ## 技術スタック
@@ -144,22 +141,6 @@ DELETE /api/locks/{lockName}
 }
 ```
 
-### ロック状態確認
-
-```
-GET /api/locks/{lockName}
-```
-
-レスポンス例:
-```json
-{
-  "lock_name": "test_lock",
-  "is_locked": true,
-  "owner_session_id": "123456",
-  "current_session_id": "123456",
-  "is_owned_by_current_session": true
-}
-```
 
 ### ロック取得・保持・解放（一連の操作）
 
@@ -210,12 +191,6 @@ SELECT CONNECTION_ID();
 
 -- ロックを取得（第2引数はタイムアウト秒数）
 SELECT GET_LOCK('test_lock', 10);
-
--- ロックの所有者を確認
-SELECT IS_USED_LOCK('test_lock');
-
--- ロックが解放されているか確認
-SELECT IS_FREE_LOCK('test_lock');
 
 -- ロックを解放
 SELECT RELEASE_LOCK('test_lock');

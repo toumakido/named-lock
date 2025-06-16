@@ -50,21 +50,13 @@ func RunHoldReleaseTest(c *Client, lockName string, args ...interface{}) {
 	// 実行開始時間を記録
 	startTime := time.Now()
 
-	// // セッションIDを取得
-	// sessionID, err := c.GetSessionID()
-	// if err != nil {
-	// 	fmt.Printf("Client %d [%.1fs]: Failed to get session ID: %v\n", c.ID, time.Since(startTime).Seconds(), err)
-	// 	return
-	// }
-	// fmt.Printf("Client %d [%.1fs]: Session ID: %s\n", c.ID, time.Since(startTime).Seconds(), sessionID)
-
 	// ロックの状態を確認
-	// status, err := c.GetLockStatus(lockName)
-	// if err != nil {
-	// 	fmt.Printf("Client %d [%.1fs]: Failed to get lock status: %v\n", c.ID, time.Since(startTime).Seconds(), err)
-	// 	return
-	// }
-	// fmt.Printf("Client %d [%.1fs]: Lock status before operation: %+v\n", c.ID, time.Since(startTime).Seconds(), status)
+	status, err := c.GetLockStatus(lockName)
+	if err != nil {
+		fmt.Printf("Client %d [%.1fs]: Failed to get lock status: %v\n", c.ID, time.Since(startTime).Seconds(), err)
+		return
+	}
+	fmt.Printf("Client %d [%.1fs]: Lock status before operation: %+v\n", c.ID, time.Since(startTime).Seconds(), status)
 
 	// ロックを取得・保持・解放
 	fmt.Printf("Client %d [%.1fs]: Acquiring, holding for %d seconds, and releasing lock...\n", c.ID, time.Since(startTime).Seconds(), holdDuration)
@@ -76,12 +68,12 @@ func RunHoldReleaseTest(c *Client, lockName string, args ...interface{}) {
 	fmt.Printf("Client %d [%.1fs]: Operation result: %+v\n", c.ID, time.Since(startTime).Seconds(), lockResp)
 
 	// ロックの状態を最終確認
-	// status, err = c.GetLockStatus(lockName)
-	// if err != nil {
-	// 	fmt.Printf("Client %d [%.1fs]: Failed to get lock status: %v\n", c.ID, time.Since(startTime).Seconds(), err)
-	// 	return
-	// }
-	// fmt.Printf("Client %d [%.1fs]: Lock status after operation: %+v\n", c.ID, time.Since(startTime).Seconds(), status)
+	status, err = c.GetLockStatus(lockName)
+	if err != nil {
+		fmt.Printf("Client %d [%.1fs]: Failed to get lock status: %v\n", c.ID, time.Since(startTime).Seconds(), err)
+		return
+	}
+	fmt.Printf("Client %d [%.1fs]: Lock status after operation: %+v\n", c.ID, time.Since(startTime).Seconds(), status)
 }
 
 // ホールド＆リリーステストを実行する関数
