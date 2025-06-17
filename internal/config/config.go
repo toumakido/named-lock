@@ -21,7 +21,7 @@ func NewConfig() *Config {
 		DB: DBConfig{
 			Driver:   "mysql",
 			Host:     "localhost",
-			Port:     "3306",
+			Port:     "3333",
 			User:     "user",
 			Password: "password",
 			DBName:   "locktest",

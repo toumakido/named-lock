@@ -116,93 +116,62 @@ func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode
 		return fmt.Errorf("failed to acquire lock: result %d", result)
 	}
 
-	fmt.Printf("[%s] Lock acquired for product: %s\n", id, productCode)
-
-	// 商品情報を取得
-	product, err := tx.GetProductByCode(productCode)
+	// 在庫情報を取得（FOR UPDATE句を使用）
+	product, err := tx.GetProductByCodeForUpdate(productCode)
 	if err != nil {
 		return fmt.Errorf("failed to get product: %w", err)
 	}
 
-	// 商品が存在しない場合はエラー
-	if product == nil {
-		// ロックを解放
-		releaseResult, releaseErr := tx.ReleaseNamedLock(productCode)
-		if releaseErr != nil {
-			return fmt.Errorf("failed to release lock: %w", releaseErr)
-		}
-		if releaseResult != 1 {
-			return fmt.Errorf("failed to release lock: result %d", releaseResult)
-		}
-
-		// トランザクションをコミット
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("failed to commit transaction: %w", err)
-		}
-
-		return fmt.Errorf("product not found: %s", productCode)
-	}
-
-	fmt.Printf("[%s] Found product: %s (ID: %d, Price: %.2f)\n", id, product.Name, product.ID, product.Price)
-
-	// 在庫情報を取得（FOR UPDATE句を使用）
-	inventory, err := tx.GetInventoryForUpdate(product.ID)
-	if err != nil {
-		return fmt.Errorf("failed to get inventory: %w", err)
-	}
-
 	// 在庫情報が存在する場合は更新、存在しない場合は挿入
-	if inventory != nil {
-		fmt.Printf("[%s] Found existing inventory ID: %d, current quantity: %d\n", id, inventory.ID, inventory.Quantity)
+	if product != nil {
+		fmt.Printf("[%s] Found existing inventory ID: %s, current quantity: %d\n", id, product.Code, product.Quantity)
 
 		// 在庫数を増やす
-		inventory.Quantity += addQuantity
-		if err := tx.UpdateInventory(inventory); err != nil {
+		product.Quantity += addQuantity
+		if err := tx.UpdateInventory(product); err != nil {
 			return fmt.Errorf("failed to update inventory: %w", err)
 		}
 
-		fmt.Printf("[%s] Updated inventory quantity to: %d\n", id, inventory.Quantity)
+		fmt.Printf("[%s] Updated inventory quantity to: %d\n", id, product.Quantity)
 	} else {
-		fmt.Printf("[%s] No existing inventory found, inserting new inventory...\n", id)
+		fmt.Printf("[%s] No existing inventory found, inserting new product...\n", id)
 
 		// 新しい在庫情報を挿入
-		newInventory := &db.Inventory{
-			ProductID: product.ID,
-			Quantity:  addQuantity,
+		newProduct := &db.Product{
+			Code:     productCode,
+			Quantity: addQuantity,
 		}
-		if err := tx.InsertInventory(newInventory); err != nil {
-			return fmt.Errorf("failed to insert inventory: %w", err)
+		if err := tx.InsertInventory(newProduct); err != nil {
+			return fmt.Errorf("failed to insert newProduct: %w", err)
 		}
 
-		fmt.Printf("[%s] Inserted new inventory with quantity: %d\n", id, addQuantity)
+		fmt.Printf("[%s] Inserted new product with quantity: %d\n", id, addQuantity)
 	}
 
 	// 注文情報を処理する
-	order, err := tx.GetOrderForUpdate(product.ID)
+	order, err := tx.GetOrderForUpdate(productCode)
 	if err != nil {
 		return fmt.Errorf("failed to get order: %w", err)
 	}
 
 	// 注文情報が存在する場合は更新、存在しない場合は挿入
 	if order != nil {
-		fmt.Printf("[%s] Found existing order ID: %d, current quantity: %d\n", id, order.ID, order.Quantity)
+		fmt.Printf("[%s] Found existing order ID: %s, current quantity: %d\n", id, order.ID, order.Quantity)
 
 		// 注文数を増やす
 		order.Quantity += addQuantity
-		order.Status = "processing"
 		if err := tx.UpdateOrder(order); err != nil {
 			return fmt.Errorf("failed to update order: %w", err)
 		}
 
-		fmt.Printf("[%s] Updated order quantity to: %d, status to: %s\n", id, order.Quantity, order.Status)
+		fmt.Printf("[%s] Updated order quantity to: %d", id, order.Quantity)
 	} else {
 		fmt.Printf("[%s] No existing order found, inserting new order...\n", id)
 
 		// 新しい注文情報を挿入
 		newOrder := &db.Order{
-			ProductID: product.ID,
-			Quantity:  addQuantity,
-			Status:    "pending",
+			ID:       productCode, // 商品コードを注文IDとして使用
+			Quantity: addQuantity,
 		}
 		if err := tx.InsertOrder(newOrder); err != nil {
 			return fmt.Errorf("failed to insert order: %w", err)

@@ -130,22 +130,10 @@ func (h *LockHandler) AcquireProcessReleaseLock(c echo.Context) error {
 		return c.JSON(http.StatusOK, response)
 	}
 
-	// セッションIDを取得
-	sessionID, err := h.lockService.GetCurrentSessionID()
-	if err != nil {
-		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
-		response := LockResponse{
-			Success: false,
-			Message: "Failed to get session ID: " + err.Error(),
-		}
-		return c.JSON(http.StatusOK, response)
-	}
-
 	// レスポンスを作成
 	response := LockResponse{
-		Success:   true,
-		SessionID: sessionID,
-		Message:   fmt.Sprintf("Process completed successfully for product: %s, quantity: %d", req.ProductCode, req.Quantity),
+		Success: true,
+		Message: fmt.Sprintf("Process completed successfully for product: %s, quantity: %d", req.ProductCode, req.Quantity),
 	}
 
 	return c.JSON(http.StatusOK, response)

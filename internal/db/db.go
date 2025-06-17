@@ -98,37 +98,26 @@ func (tx *Tx) GetCurrentConnectionID() (int64, error) {
 
 // Product は商品情報を表す構造体
 type Product struct {
-	ID    int
-	Code  string
-	Name  string
-	Price float64
-}
-
-// Inventory は在庫情報を表す構造体
-type Inventory struct {
-	ID        int
-	ProductID int
-	Quantity  int
+	Code     string
+	Quantity int
 }
 
 // Order は注文情報を表す構造体
 type Order struct {
-	ID        int
-	ProductID int
-	Quantity  int
-	Status    string
+	ID       string
+	Quantity int
 }
 
 // GetProductByCode は商品コードから商品情報を取得する
-func (tx *Tx) GetProductByCode(productCode string) (*Product, error) {
+func (tx *Tx) GetProductByCodeForUpdate(productCode string) (*Product, error) {
 	var product Product
 
 	query := `
-		SELECT id, product_code, name, price 
+		SELECT id, quantity
 		FROM products 
-		WHERE product_code = ?`
-
-	err := tx.QueryRow(query, productCode).Scan(&product.ID, &product.Code, &product.Name, &product.Price)
+		WHERE product_code = ?
+		FOR UPDATE`
+	err := tx.QueryRow(query, productCode).Scan(&product.Code, &product.Quantity)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil // 商品が存在しない場合はnilを返す
@@ -139,40 +128,17 @@ func (tx *Tx) GetProductByCode(productCode string) (*Product, error) {
 	return &product, nil
 }
 
-// GetInventoryForUpdate は商品IDから在庫情報をFOR UPDATE句を使用して取得する
-func (tx *Tx) GetInventoryForUpdate(productID int) (*Inventory, error) {
-	var inventory Inventory
-
-	query := `
-		SELECT id, product_id, quantity 
-		FROM product_inventory 
-		WHERE product_id = ? 
-		FOR UPDATE`
-
-	err := tx.QueryRow(query, productID).Scan(&inventory.ID, &inventory.ProductID, &inventory.Quantity)
-	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			return nil, nil // 在庫情報が存在しない場合はnilを返す
-		}
-		return nil, fmt.Errorf("failed to get inventory: %w", err)
-	}
-
-	return &inventory, nil
-}
-
 // GetOrderForUpdate は商品IDから注文情報をFOR UPDATE句を使用して取得する
-func (tx *Tx) GetOrderForUpdate(productID int) (*Order, error) {
+func (tx *Tx) GetOrderForUpdate(orderID string) (*Order, error) {
 	var order Order
 
 	query := `
-		SELECT id, product_id, quantity, status 
+		SELECT id, quantity
 		FROM orders 
-		WHERE product_id = ? AND status = 'pending'
-		ORDER BY id ASC
-		LIMIT 1
+		WHERE id = ?
 		FOR UPDATE`
 
-	err := tx.QueryRow(query, productID).Scan(&order.ID, &order.ProductID, &order.Quantity, &order.Status)
+	err := tx.QueryRow(query, orderID).Scan(&order.ID, &order.Quantity)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil // 注文情報が存在しない場合はnilを返す
@@ -184,13 +150,13 @@ func (tx *Tx) GetOrderForUpdate(productID int) (*Order, error) {
 }
 
 // UpdateInventory は在庫情報を更新する
-func (tx *Tx) UpdateInventory(inventory *Inventory) error {
+func (tx *Tx) UpdateInventory(product *Product) error {
 	query := `
-		UPDATE product_inventory 
+		UPDATE products 
 		SET quantity = ?
 		WHERE id = ?`
 
-	_, err := tx.Exec(query, inventory.Quantity, inventory.ID)
+	_, err := tx.Exec(query, product.Quantity, product.Code)
 	if err != nil {
 		return fmt.Errorf("failed to update inventory: %w", err)
 	}
@@ -199,24 +165,16 @@ func (tx *Tx) UpdateInventory(inventory *Inventory) error {
 }
 
 // InsertInventory は新しい在庫情報を挿入する
-func (tx *Tx) InsertInventory(inventory *Inventory) error {
+func (tx *Tx) InsertInventory(product *Product) error {
 	query := `
-		INSERT INTO product_inventory 
-		(product_id, quantity) 
+		INSERT INTO products 
+		(product_code, quantity) 
 		VALUES (?, ?)`
 
-	result, err := tx.Exec(query, inventory.ProductID, inventory.Quantity)
+	_, err := tx.Exec(query, product.Code, product.Quantity)
 	if err != nil {
 		return fmt.Errorf("failed to insert inventory: %w", err)
 	}
-
-	// 挿入されたIDを取得
-	id, err := result.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("failed to get last insert id: %w", err)
-	}
-	inventory.ID = int(id)
-
 	return nil
 }
 
@@ -227,7 +185,7 @@ func (tx *Tx) UpdateOrder(order *Order) error {
 		SET quantity = ?, status = ?
 		WHERE id = ?`
 
-	_, err := tx.Exec(query, order.Quantity, order.Status, order.ID)
+	_, err := tx.Exec(query, order.Quantity, order.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update order: %w", err)
 	}
@@ -239,20 +197,12 @@ func (tx *Tx) UpdateOrder(order *Order) error {
 func (tx *Tx) InsertOrder(order *Order) error {
 	query := `
 		INSERT INTO orders 
-		(product_id, quantity, status) 
-		VALUES (?, ?, ?)`
+		(product_id, quantity) 
+		VALUES (?, ?)`
 
-	result, err := tx.Exec(query, order.ProductID, order.Quantity, order.Status)
+	_, err := tx.Exec(query, order.ID, order.Quantity)
 	if err != nil {
 		return fmt.Errorf("failed to insert order: %w", err)
 	}
-
-	// 挿入されたIDを取得
-	id, err := result.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("failed to get last insert id: %w", err)
-	}
-	order.ID = int(id)
-
 	return nil
 }

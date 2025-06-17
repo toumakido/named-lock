@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ProcessLockRequest はプロセスロックリクエストの構造体
@@ -66,14 +68,6 @@ func RunProcessTest(c *Client, productCode string, args ...interface{}) {
 		}
 	}
 
-	// ロックの状態を確認
-	status, err := c.GetLockStatus(productCode)
-	if err != nil {
-		fmt.Printf("Client %d [%.1fs]: Failed to get lock status: %v\n", c.ID, time.Since(startTime).Seconds(), err)
-		return
-	}
-	fmt.Printf("Client %d [%.1fs]: Lock status before operation: %+v\n", c.ID, time.Since(startTime).Seconds(), status)
-
 	// ロックを取得・処理・解放
 	fmt.Printf("Client %d [%.1fs]: Acquiring, processing, and releasing lock for product: %s, quantity: %d\n",
 		c.ID, time.Since(startTime).Seconds(), productCode, quantity)
@@ -83,18 +77,10 @@ func RunProcessTest(c *Client, productCode string, args ...interface{}) {
 		return
 	}
 	fmt.Printf("Client %d [%.1fs]: Operation result: %+v\n", c.ID, time.Since(startTime).Seconds(), processResp)
-
-	// ロックの状態を最終確認
-	status, err = c.GetLockStatus(productCode)
-	if err != nil {
-		fmt.Printf("Client %d [%.1fs]: Failed to get lock status: %v\n", c.ID, time.Since(startTime).Seconds(), err)
-		return
-	}
-	fmt.Printf("Client %d [%.1fs]: Lock status after operation: %+v\n", c.ID, time.Since(startTime).Seconds(), status)
 }
 
 // RunProcessLockTest はプロセスロックテストを実行する関数
 func RunProcessLockTest(startID int, parallelCount int) {
-	productCode := "P001" // テスト用の商品コード
+	productCode := uuid.New().String() // ランダムな商品コードを生成
 	RunParallel(startID, parallelCount, productCode, RunProcessTest)
 }

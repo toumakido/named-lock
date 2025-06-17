@@ -13,7 +13,7 @@ func main() {
 	startID, parallelCount, args := post.ParseCommonArgs()
 
 	// テストモードの選択（デフォルトは通常のロックテスト）
-	testMode := "normal"
+	testMode := "hold"
 	if len(args) > 0 {
 		testMode = args[0]
 	}
@@ -38,7 +38,6 @@ func main() {
 		fmt.Printf("未知のテストモード: %s\n", testMode)
 		fmt.Println("使用方法: go run ./client [開始ID] [並列数] [テストモード] [追加パラメータ...]")
 		fmt.Println("テストモード:")
-		fmt.Println("  normal, n: 通常のロック取得・解放テスト")
 		fmt.Println("  hold, h: ロック保持・解放テスト [保持時間(秒)]")
 		fmt.Println("  process, p: プロセスロックテスト")
 		os.Exit(1)
