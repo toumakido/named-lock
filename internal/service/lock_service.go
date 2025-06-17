@@ -57,8 +57,8 @@ func (s *LockService) AcquireHoldReleaseLock(ctx context.Context, lockName strin
 		return sessionID, fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	// ロック取得に失敗した場合
-	if !result {
-		return sessionID, fmt.Errorf("failed to acquire lock: result %v", result)
+	if result != 1 {
+		return sessionID, fmt.Errorf("failed to acquire lock: result %d", result)
 	}
 
 	sID, err = tx.GetCurrentConnectionID()
@@ -81,8 +81,8 @@ func (s *LockService) AcquireHoldReleaseLock(ctx context.Context, lockName strin
 	if err != nil {
 		return sessionID, fmt.Errorf("failed to release: %w", err)
 	}
-	if !result {
-		return sessionID, fmt.Errorf("failed to release: result %v", result)
+	if result != 1 {
+		return sessionID, fmt.Errorf("failed to release: result %d", result)
 	}
 
 	// トランザクションをコミット
@@ -112,8 +112,8 @@ func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	// ロック取得に失敗した場合
-	if !result {
-		return fmt.Errorf("failed to acquire lock: result %v", result)
+	if result != 1 {
+		return fmt.Errorf("failed to acquire lock: result %d", result)
 	}
 
 	// 在庫情報を取得（FOR UPDATE句を使用）
@@ -147,9 +147,6 @@ func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode
 
 		fmt.Printf("[%s] Inserted new product with quantity: %d\n", id, addQuantity)
 	}
-
-	// １秒まつ
-	time.Sleep(1 * time.Second)
 
 	// 注文情報を処理する
 	order, err := tx.GetOrderForUpdate(productCode)
@@ -188,8 +185,8 @@ func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode
 	if err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}
-	if !result {
-		return fmt.Errorf("failed to release lock: result %v", result)
+	if result != 1 {
+		return fmt.Errorf("failed to release lock: result %d", result)
 	}
 
 	fmt.Printf("[%s] Lock released\n", id)
