@@ -157,7 +157,7 @@ type Order struct {
 	Code string
 }
 
-func (db *DB) ListOrderByCode(code string) ([]*Order, error) {
+func (tx *Tx) ListOrderByCode(code string) ([]*Order, error) {
 	var orders []*Order
 
 	query := `
@@ -165,7 +165,7 @@ func (db *DB) ListOrderByCode(code string) ([]*Order, error) {
 		FROM orders 
 		WHERE code = ?`
 
-	rows, err := db.Query(query, code)
+	rows, err := tx.Query(query, code)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list orders: %w", err)
 	}

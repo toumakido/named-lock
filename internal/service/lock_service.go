@@ -201,7 +201,7 @@ func (s *LockService) AcquireOrderReleaseLock(ctx context.Context, code string, 
 	if err := tx.InsertOrder(newOrder); err != nil {
 		return fmt.Errorf("failed to insert order: %w", err)
 	}
-	orders, err := s.db.ListOrderByCode(code)
+	orders, err := tx.ListOrderByCode(code)
 	if err != nil {
 		return fmt.Errorf("failed to list orders: %w", err)
 	}
