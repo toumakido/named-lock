@@ -43,7 +43,9 @@ named-lock/
 │   ├── post/
 │   │   ├── common.go          # クライアント共通処理
 │   │   ├── test_client.go     # テスト用クライアント
-│   │   └── test_client_hold_release.go # ホールド・リリーステスト用クライアント
+│   │   ├── test_client_hold_release.go # ホールド・リリーステスト用クライアント
+│   │   ├── test_client_product.go # 商品ロックテスト用クライアント
+│   │   └── test_client_order.go # 注文ロックテスト用クライアント
 │   └── service/
 │       └── lock_service.go    # ビジネスロジック
 ├── docker-compose.yml         # Docker Compose設定
@@ -82,6 +84,8 @@ go run cmd/client/main.go 1 5
 
 # 開始ID、並列数、テストモードを指定して実行
 go run cmd/client/main.go 1 5 hold 10  # ID 1から5つのクライアントで10秒間ロック保持テスト
+go run cmd/client/main.go 1 5 product  # ID 1から5つのクライアントで商品ロックテスト
+go run cmd/client/main.go 1 5 order    # ID 1から5つのクライアントで注文ロックテスト
 ```
 
 並列実行の場合、第1引数は開始クライアントID、第2引数は並列数を指定します。各クライアントは独自のIDを持ち、並行してロックの取得・解放を試みます。
@@ -89,7 +93,8 @@ go run cmd/client/main.go 1 5 hold 10  # ID 1から5つのクライアントで1
 テストモードには以下のオプションがあります：
 - `normal`または`n`：通常のロック取得・解放テスト（デフォルト）
 - `hold`または`h`：ロック保持・解放テスト（追加パラメータで保持時間を秒単位で指定可能）
-- `process`または`p`：プロセスロックテスト（データ処理を含むロック取得・解放テスト）
+- `process`または`p`：プロセスロックテスト（商品データ処理を含むロック取得・解放テスト）
+- `order`または`o`：注文ロックテスト（注文データ処理を含むロック取得・解放テスト）
 
 ## APIエンドポイント
 
@@ -169,18 +174,17 @@ POST /api/locks/hold-and-release
 }
 ```
 
-### ロック取得・処理・解放（一連の操作）
+### 商品ロック取得・処理・解放（一連の操作）
 
 ```
-POST /api/locks/process
+POST /api/locks/product
 ```
 
 リクエスト例:
 ```json
 {
-  "lock_name": "test_process_lock",
-  "item_key": "item1",
-  "value": "{\"data\": \"updated_value\"}",
+  "product_code": "product123",
+  "quantity": 5,
   "timeout": 10
 }
 ```
@@ -189,8 +193,29 @@ POST /api/locks/process
 ```json
 {
   "success": true,
-  "session_id": "123456",
-  "message": "Process completed successfully for item: item1"
+  "message": "Process completed successfully for product: product123, quantity: 5"
+}
+```
+
+### 注文ロック取得・処理・解放（一連の操作）
+
+```
+POST /api/locks/order
+```
+
+リクエスト例:
+```json
+{
+  "product_code": "product123",
+  "timeout": 10
+}
+```
+
+レスポンス例:
+```json
+{
+  "success": true,
+  "message": "Process completed successfully for product: product123"
 }
 ```
 
