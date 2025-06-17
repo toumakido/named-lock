@@ -51,6 +51,23 @@ func (db *DB) GetCurrentConnectionID() (int64, error) {
 	return id, nil
 }
 
+// GetNamedLock は名前付きロックを取得する
+// lockName: ロック名
+// timeout: タイムアウト（秒）
+// 戻り値: 1=ロック取得成功, 0=ロック取得失敗, error=エラー
+func (db *DB) GetNamedLock(lockName string, timeout int) (*Tx, bool, error) {
+	tx, err := db.BeginTx(context.Background())
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	var result bool
+	err = tx.QueryRow("SELECT GET_LOCK(?, ?)", lockName, timeout).Scan(&result)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get lock: %w", err)
+	}
+	return tx, result, nil
+}
+
 // BeginTx はトランザクションを開始する
 // トランザクションを開始しても同じ接続（セッション）が使用されるため、セッションIDは変わらない
 func (db *DB) BeginTx(ctx context.Context) (*Tx, error) {

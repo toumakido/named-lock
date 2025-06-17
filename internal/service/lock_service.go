@@ -177,15 +177,8 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 func (s *LockService) AcquireOrderReleaseLock(ctx context.Context, code string, timeout int) error {
 	id := uuid.New().String()
 
-	// トランザクションを開始
-	tx, err := s.db.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
 	// ロックを取得
-	result, err := tx.GetNamedLock(code, timeout)
+	lockTx, result, err := s.db.GetNamedLock(code, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
@@ -193,6 +186,14 @@ func (s *LockService) AcquireOrderReleaseLock(ctx context.Context, code string, 
 	if !result {
 		return fmt.Errorf("failed to acquire lock: result %v", result)
 	}
+	defer lockTx.Rollback()
+
+	// トランザクションを開始
+	tx, err := s.db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
 
 	newOrder := &db.Order{
 		ID:   id,
@@ -209,7 +210,7 @@ func (s *LockService) AcquireOrderReleaseLock(ctx context.Context, code string, 
 	fmt.Printf("[%s] Inserted new order with ID: %s, Code: %s, Total Orders: %d\n", id, newOrder.ID, newOrder.Code, len(orders))
 
 	// ロックを解放
-	result, err = tx.ReleaseNamedLock(code)
+	result, err = lockTx.ReleaseNamedLock(code)
 	if err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}
