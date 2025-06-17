@@ -99,15 +99,8 @@ func (s *LockService) AcquireHoldReleaseLock(ctx context.Context, lockName strin
 func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode string, addQuantity int, timeout int) error {
 	id := uuid.New().String()
 
-	// トランザクションを開始
-	tx, err := s.db.BeginTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
 	// ロックを取得
-	result, err := tx.GetNamedLock(productCode, timeout)
+	lockTx, result, err := s.db.GetNamedLock(productCode, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
@@ -115,6 +108,13 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 	if !result {
 		return fmt.Errorf("failed to acquire lock: result %v", result)
 	}
+
+	// トランザクションを開始
+	tx, err := s.db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
 
 	// 在庫情報を取得（FOR UPDATE句を使用）
 	product, err := tx.GetProductForUpdate(productCode)
@@ -152,7 +152,7 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 	time.Sleep(1 * time.Second)
 
 	// ロックを解放
-	result, err = tx.ReleaseNamedLock(productCode)
+	result, err = lockTx.ReleaseNamedLock(productCode)
 	if err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}
