@@ -33,7 +33,7 @@ func main() {
 		post.RunHoldReleaseLockTest(startID, parallelCount, holdDuration)
 	case "process", "p":
 		fmt.Println("実行モード: プロセスロックテスト")
-		post.RunProcessLockTest(startID, parallelCount)
+		post.RunProductLockTest(startID, parallelCount)
 	default:
 		fmt.Printf("未知のテストモード: %s\n", testMode)
 		fmt.Println("使用方法: go run ./client [開始ID] [並列数] [テストモード] [追加パラメータ...]")

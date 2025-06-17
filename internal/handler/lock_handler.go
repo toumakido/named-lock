@@ -35,10 +35,16 @@ type AcquireHoldReleaseRequest struct {
 	HoldDuration int    `json:"hold_duration"`
 }
 
-// AcquireProcessReleaseRequest はロック取得・処理・解放リクエストの構造体
-type AcquireProcessReleaseRequest struct {
+// AcquireProductReleaseRequest はロック取得・処理・解放リクエストの構造体
+type AcquireProductReleaseRequest struct {
 	ProductCode string `json:"product_code"`
 	Quantity    int    `json:"quantity"`
+	Timeout     int    `json:"timeout"`
+}
+
+// AcquireOrderReleaseRequest はロック取得・処理・解放リクエストの構造体
+type AcquireOrderReleaseRequest struct {
+	ProductCode string `json:"product_code"`
 	Timeout     int    `json:"timeout"`
 }
 
@@ -107,9 +113,9 @@ func (h *LockHandler) AcquireHoldReleaseLock(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// AcquireProcessReleaseLock はロックを取得し、処理し、解放するハンドラ
+// AcquireProductReleaseLock はロックを取得し、処理し、解放するハンドラ
 func (h *LockHandler) AcquireProductReleaseLock(c echo.Context) error {
-	var req AcquireProcessReleaseRequest
+	var req AcquireProductReleaseRequest
 	if err := c.Bind(&req); err != nil {
 		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
 		response := LockResponse{
@@ -139,9 +145,42 @@ func (h *LockHandler) AcquireProductReleaseLock(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
+// AcquireOrderReleaseLock はロックを取得し、処理し、解放するハンドラ
+func (h *LockHandler) AcquireOrderReleaseLock(c echo.Context) error {
+	var req AcquireOrderReleaseRequest
+	if err := c.Bind(&req); err != nil {
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success: false,
+			Message: "Invalid request body: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
+	}
+
+	// ロックを取得し、処理し、解放する
+	err := h.lockService.AcquireOrderReleaseLock(c.Request().Context(), req.ProductCode, req.Timeout)
+	if err != nil {
+		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
+		response := LockResponse{
+			Success: false,
+			Message: "Operation failed: " + err.Error(),
+		}
+		return c.JSON(http.StatusOK, response)
+	}
+
+	// レスポンスを作成
+	response := LockResponse{
+		Success: true,
+		Message: fmt.Sprintf("Process completed successfully for product: %s", req.ProductCode),
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
 // RegisterRoutes はルートを登録する
 func (h *LockHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/session", h.GetCurrentSession)
 	e.POST("/api/locks/hold-and-release", h.AcquireHoldReleaseLock)
-	e.POST("/api/locks/process", h.AcquireProductReleaseLock)
+	e.POST("/api/locks/product", h.AcquireProductReleaseLock)
+	e.POST("/api/locks/order", h.AcquireOrderReleaseLock)
 }
