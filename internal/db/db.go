@@ -109,13 +109,13 @@ type Order struct {
 }
 
 // GetProductByCode は商品コードから商品情報を取得する
-func (tx *Tx) GetProductByCodeForUpdate(productCode string) (*Product, error) {
+func (tx *Tx) GetProductForUpdate(productCode string) (*Product, error) {
 	var product Product
 
 	query := `
-		SELECT id, quantity
+		SELECT code, quantity
 		FROM products 
-		WHERE product_code = ?
+		WHERE code = ?
 		FOR UPDATE`
 	err := tx.QueryRow(query, productCode).Scan(&product.Code, &product.Quantity)
 	if err != nil {
@@ -154,7 +154,7 @@ func (tx *Tx) UpdateInventory(product *Product) error {
 	query := `
 		UPDATE products 
 		SET quantity = ?
-		WHERE id = ?`
+		WHERE code = ?`
 
 	_, err := tx.Exec(query, product.Quantity, product.Code)
 	if err != nil {
@@ -168,7 +168,7 @@ func (tx *Tx) UpdateInventory(product *Product) error {
 func (tx *Tx) InsertInventory(product *Product) error {
 	query := `
 		INSERT INTO products 
-		(product_code, quantity) 
+		(code, quantity) 
 		VALUES (?, ?)`
 
 	_, err := tx.Exec(query, product.Code, product.Quantity)
@@ -182,7 +182,7 @@ func (tx *Tx) InsertInventory(product *Product) error {
 func (tx *Tx) UpdateOrder(order *Order) error {
 	query := `
 		UPDATE orders 
-		SET quantity = ?, status = ?
+		SET quantity = ?
 		WHERE id = ?`
 
 	_, err := tx.Exec(query, order.Quantity, order.ID)
@@ -197,7 +197,7 @@ func (tx *Tx) UpdateOrder(order *Order) error {
 func (tx *Tx) InsertOrder(order *Order) error {
 	query := `
 		INSERT INTO orders 
-		(product_id, quantity) 
+		(id, quantity) 
 		VALUES (?, ?)`
 
 	_, err := tx.Exec(query, order.ID, order.Quantity)

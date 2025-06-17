@@ -117,7 +117,7 @@ func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode
 	}
 
 	// 在庫情報を取得（FOR UPDATE句を使用）
-	product, err := tx.GetProductByCodeForUpdate(productCode)
+	product, err := tx.GetProductForUpdate(productCode)
 	if err != nil {
 		return fmt.Errorf("failed to get product: %w", err)
 	}
