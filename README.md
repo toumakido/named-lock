@@ -8,6 +8,8 @@
 - 複数のクライアントからのリクエストでロックの競合を確認
 - 各セッションのセッションID（CONNECTION_ID）の取得
 - ロックの取得・保持・解放を一連の操作として実行する機能
+- トランザクション内でのFOR UPDATE句を使用したデータ処理
+- ロックを取得し、データを処理し、解放する一連の操作を実行する機能
 
 ## 技術スタック
 
@@ -87,6 +89,7 @@ go run cmd/client/main.go 1 5 hold 10  # ID 1から5つのクライアントで1
 テストモードには以下のオプションがあります：
 - `normal`または`n`：通常のロック取得・解放テスト（デフォルト）
 - `hold`または`h`：ロック保持・解放テスト（追加パラメータで保持時間を秒単位で指定可能）
+- `process`または`p`：プロセスロックテスト（データ処理を含むロック取得・解放テスト）
 
 ## APIエンドポイント
 
@@ -163,6 +166,31 @@ POST /api/locks/hold-and-release
   "success": true,
   "session_id": "123456",
   "message": "Lock acquired, held for 5 seconds, and released successfully. Current connection ID: 123456"
+}
+```
+
+### ロック取得・処理・解放（一連の操作）
+
+```
+POST /api/locks/process
+```
+
+リクエスト例:
+```json
+{
+  "lock_name": "test_process_lock",
+  "item_key": "item1",
+  "value": "{\"data\": \"updated_value\"}",
+  "timeout": 10
+}
+```
+
+レスポンス例:
+```json
+{
+  "success": true,
+  "session_id": "123456",
+  "message": "Process completed successfully for item: item1"
 }
 ```
 
