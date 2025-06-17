@@ -10,24 +10,24 @@ import (
 	"github.com/google/uuid"
 )
 
-// ProcessLockRequest はプロセスロックリクエストの構造体
-type ProcessLockRequest struct {
+// ProductLockRequest はプロセスロックリクエストの構造体
+type ProductLockRequest struct {
 	ProductCode string `json:"product_code"`
 	Quantity    int    `json:"quantity"`
 	Timeout     int    `json:"timeout"`
 }
 
-// ProcessLockResponse はプロセスロックレスポンスの構造体
-type ProcessLockResponse struct {
+// ProductLockResponse はプロセスロックレスポンスの構造体
+type ProductLockResponse struct {
 	Success   bool                   `json:"success"`
 	SessionID string                 `json:"session_id,omitempty"`
 	Message   string                 `json:"message,omitempty"`
 	Item      map[string]interface{} `json:"item,omitempty"`
 }
 
-// AcquireProcessReleaseLock はロックを取得し、処理し、解放する
-func (c *Client) AcquireProcessReleaseLock(productCode string, quantity int, timeout int) (*ProcessLockResponse, error) {
-	reqBody, err := json.Marshal(ProcessLockRequest{
+// AcquireProductReleaseLock はロックを取得し、処理し、解放する
+func (c *Client) AcquireProductReleaseLock(productCode string, quantity int, timeout int) (*ProductLockResponse, error) {
+	reqBody, err := json.Marshal(ProductLockRequest{
 		ProductCode: productCode,
 		Quantity:    quantity,
 		Timeout:     timeout,
@@ -36,7 +36,7 @@ func (c *Client) AcquireProcessReleaseLock(productCode string, quantity int, tim
 		return nil, err
 	}
 
-	resp, err := c.Client.Post("http://localhost:8080/api/locks/process", "application/json", bytes.NewBuffer(reqBody))
+	resp, err := c.Client.Post("http://localhost:8080/api/locks/product", "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (c *Client) AcquireProcessReleaseLock(productCode string, quantity int, tim
 		return nil, err
 	}
 
-	var processResp ProcessLockResponse
+	var processResp ProductLockResponse
 	if err := json.Unmarshal(body, &processResp); err != nil {
 		return nil, err
 	}
@@ -55,8 +55,8 @@ func (c *Client) AcquireProcessReleaseLock(productCode string, quantity int, tim
 	return &processResp, nil
 }
 
-// RunProcessTest はプロセスロックテストを実行する
-func RunProcessTest(c *Client, productCode string, args ...interface{}) {
+// RunProductTest はプロセスロックテストを実行する
+func RunProductTest(c *Client, productCode string, args ...interface{}) {
 	// 実行開始時間を記録
 	startTime := time.Now()
 
@@ -71,7 +71,7 @@ func RunProcessTest(c *Client, productCode string, args ...interface{}) {
 	// ロックを取得・処理・解放
 	fmt.Printf("Client %d [%.1fs]: Acquiring, processing, and releasing lock for product: %s, quantity: %d\n",
 		c.ID, time.Since(startTime).Seconds(), productCode, quantity)
-	processResp, err := c.AcquireProcessReleaseLock(productCode, quantity, -1)
+	processResp, err := c.AcquireProductReleaseLock(productCode, quantity, -1)
 	if err != nil {
 		fmt.Printf("Client %d [%.1fs]: Operation failed: %v\n", c.ID, time.Since(startTime).Seconds(), err)
 		return
@@ -79,8 +79,8 @@ func RunProcessTest(c *Client, productCode string, args ...interface{}) {
 	fmt.Printf("Client %d [%.1fs]: Operation result: %+v\n", c.ID, time.Since(startTime).Seconds(), processResp)
 }
 
-// RunProcessLockTest はプロセスロックテストを実行する関数
-func RunProcessLockTest(startID int, parallelCount int) {
+// RunProductLockTest はプロセスロックテストを実行する関数
+func RunProductLockTest(startID int, parallelCount int) {
 	productCode := uuid.New().String() // ランダムな商品コードを生成
-	RunParallel(startID, parallelCount, productCode, RunProcessTest)
+	RunParallel(startID, parallelCount, productCode, RunProductTest)
 }

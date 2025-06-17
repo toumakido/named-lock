@@ -51,6 +51,23 @@ func (db *DB) GetCurrentConnectionID() (int64, error) {
 	return id, nil
 }
 
+// GetNamedLock は名前付きロックを取得する
+// lockName: ロック名
+// timeout: タイムアウト（秒）
+// 戻り値: 1=ロック取得成功, 0=ロック取得失敗, error=エラー
+func (db *DB) GetNamedLock(lockName string, timeout int) (*Tx, bool, error) {
+	tx, err := db.BeginTx(context.Background())
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	var result bool
+	err = tx.QueryRow("SELECT GET_LOCK(?, ?)", lockName, timeout).Scan(&result)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get lock: %w", err)
+	}
+	return tx, result, nil
+}
+
 // BeginTx はトランザクションを開始する
 // トランザクションを開始しても同じ接続（セッション）が使用されるため、セッションIDは変わらない
 func (db *DB) BeginTx(ctx context.Context) (*Tx, error) {
@@ -102,12 +119,6 @@ type Product struct {
 	Quantity int
 }
 
-// Order は注文情報を表す構造体
-type Order struct {
-	ID       string
-	Quantity int
-}
-
 // GetProductByCode は商品コードから商品情報を取得する
 func (tx *Tx) GetProductForUpdate(productCode string) (*Product, error) {
 	var product Product
@@ -126,27 +137,6 @@ func (tx *Tx) GetProductForUpdate(productCode string) (*Product, error) {
 	}
 
 	return &product, nil
-}
-
-// GetOrderForUpdate は商品IDから注文情報をFOR UPDATE句を使用して取得する
-func (tx *Tx) GetOrderForUpdate(orderID string) (*Order, error) {
-	var order Order
-
-	query := `
-		SELECT id, quantity
-		FROM orders 
-		WHERE id = ?
-		FOR UPDATE`
-
-	err := tx.QueryRow(query, orderID).Scan(&order.ID, &order.Quantity)
-	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			return nil, nil // 注文情報が存在しない場合はnilを返す
-		}
-		return nil, fmt.Errorf("failed to get order: %w", err)
-	}
-
-	return &order, nil
 }
 
 // UpdateInventory は在庫情報を更新する
@@ -178,29 +168,46 @@ func (tx *Tx) InsertInventory(product *Product) error {
 	return nil
 }
 
-// UpdateOrder は注文情報を更新する
-func (tx *Tx) UpdateOrder(order *Order) error {
+// Order は注文情報を表す構造体
+type Order struct {
+	ID   string
+	Code string
+}
+
+func (tx *Tx) ListOrderByCode(code string) ([]*Order, error) {
+	var orders []*Order
+
 	query := `
-		UPDATE orders 
-		SET quantity = ?
-		WHERE id = ?`
+		SELECT id, code
+		FROM orders 
+		WHERE code = ?`
 
-	_, err := tx.Exec(query, order.Quantity, order.ID)
+	rows, err := tx.Query(query, code)
 	if err != nil {
-		return fmt.Errorf("failed to update order: %w", err)
+		return nil, fmt.Errorf("failed to list orders: %w", err)
 	}
-
-	return nil
+	defer rows.Close()
+	for rows.Next() {
+		var order Order
+		if err := rows.Scan(&order.ID, &order.Code); err != nil {
+			return nil, fmt.Errorf("failed to scan order: %w", err)
+		}
+		orders = append(orders, &order)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over orders: %w", err)
+	}
+	return orders, nil
 }
 
 // InsertOrder は新しい注文情報を挿入する
 func (tx *Tx) InsertOrder(order *Order) error {
 	query := `
 		INSERT INTO orders 
-		(id, quantity) 
+		(id, code) 
 		VALUES (?, ?)`
 
-	_, err := tx.Exec(query, order.ID, order.Quantity)
+	_, err := tx.Exec(query, order.ID, order.Code)
 	if err != nil {
 		return fmt.Errorf("failed to insert order: %w", err)
 	}

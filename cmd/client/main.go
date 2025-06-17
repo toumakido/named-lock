@@ -31,15 +31,19 @@ func main() {
 		}
 		fmt.Printf("保持時間: %d秒\n", holdDuration)
 		post.RunHoldReleaseLockTest(startID, parallelCount, holdDuration)
-	case "process", "p":
-		fmt.Println("実行モード: プロセスロックテスト")
-		post.RunProcessLockTest(startID, parallelCount)
+	case "product", "p":
+		fmt.Println("実行モード: 商品ロックテスト")
+		post.RunProductLockTest(startID, parallelCount)
+	case "order", "o":
+		fmt.Println("実行モード: 注文ロックテスト")
+		post.RunOrderLockTest(startID, parallelCount)
 	default:
 		fmt.Printf("未知のテストモード: %s\n", testMode)
 		fmt.Println("使用方法: go run ./client [開始ID] [並列数] [テストモード] [追加パラメータ...]")
 		fmt.Println("テストモード:")
 		fmt.Println("  hold, h: ロック保持・解放テスト [保持時間(秒)]")
-		fmt.Println("  process, p: プロセスロックテスト")
+		fmt.Println("  process, p: 商品ロックテスト")
+		fmt.Println("  order, o: 注文ロックテスト")
 		os.Exit(1)
 	}
 }
