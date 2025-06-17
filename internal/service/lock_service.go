@@ -124,17 +124,17 @@ func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode
 
 	// 在庫情報が存在する場合は更新、存在しない場合は挿入
 	if product != nil {
-		fmt.Printf("[%s] Found existing inventory ID: %s, current quantity: %d\n", id, product.Code, product.Quantity)
+		fmt.Printf("[%s] Found existing product ID: %s, current quantity: %d\n", id, product.Code, product.Quantity)
 
 		// 在庫数を増やす
 		product.Quantity += addQuantity
 		if err := tx.UpdateInventory(product); err != nil {
-			return fmt.Errorf("failed to update inventory: %w", err)
+			return fmt.Errorf("failed to update product: %w", err)
 		}
 
-		fmt.Printf("[%s] Updated inventory quantity to: %d\n", id, product.Quantity)
+		fmt.Printf("[%s] Updated product quantity to: %d\n", id, product.Quantity)
 	} else {
-		fmt.Printf("[%s] No existing inventory found, inserting new product...\n", id)
+		fmt.Printf("[%s] No existing product found, inserting new product...\n", id)
 
 		// 新しい在庫情報を挿入
 		newProduct := &db.Product{
@@ -150,38 +150,6 @@ func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode
 
 	// １秒まつ
 	time.Sleep(1 * time.Second)
-
-	// 注文情報を処理する
-	order, err := tx.GetOrderForUpdate(productCode)
-	if err != nil {
-		return fmt.Errorf("failed to get order: %w", err)
-	}
-
-	// 注文情報が存在する場合は更新、存在しない場合は挿入
-	if order != nil {
-		fmt.Printf("[%s] Found existing order ID: %s, current quantity: %d\n", id, order.ID, order.Quantity)
-
-		// 注文数を増やす
-		order.Quantity += addQuantity
-		if err := tx.UpdateOrder(order); err != nil {
-			return fmt.Errorf("failed to update order: %w", err)
-		}
-
-		fmt.Printf("[%s] Updated order quantity to: %d", id, order.Quantity)
-	} else {
-		fmt.Printf("[%s] No existing order found, inserting new order...\n", id)
-
-		// 新しい注文情報を挿入
-		newOrder := &db.Order{
-			ID:       productCode, // 商品コードを注文IDとして使用
-			Quantity: addQuantity,
-		}
-		if err := tx.InsertOrder(newOrder); err != nil {
-			return fmt.Errorf("failed to insert order: %w", err)
-		}
-
-		fmt.Printf("[%s] Inserted new order with quantity: %d\n", id, addQuantity)
-	}
 
 	// ロックを解放
 	result, err = tx.ReleaseNamedLock(productCode)
