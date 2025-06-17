@@ -65,25 +65,25 @@ func (db *DB) BeginTx(ctx context.Context) (*Tx, error) {
 // lockName: ロック名
 // timeout: タイムアウト（秒）
 // 戻り値: 1=ロック取得成功, 0=ロック取得失敗, error=エラー
-func (tx *Tx) GetNamedLock(lockName string, timeout int) (int, error) {
-	var result sql.NullInt64
+func (tx *Tx) GetNamedLock(lockName string, timeout int) (bool, error) {
+	var result bool
 	err := tx.QueryRow("SELECT GET_LOCK(?, ?)", lockName, timeout).Scan(&result)
 	if err != nil {
-		return -1, fmt.Errorf("failed to get lock: %w", err)
+		return false, fmt.Errorf("failed to get lock: %w", err)
 	}
-	return int(result.Int64), nil
+	return result, nil
 }
 
 // ReleaseNamedLock は名前付きロックを解放する
 // lockName: ロック名
 // 戻り値: 1=ロック解放成功, 0=ロックが存在しないか他のセッションが所有, error=エラー
-func (tx *Tx) ReleaseNamedLock(lockName string) (int, error) {
-	var result sql.NullInt64
+func (tx *Tx) ReleaseNamedLock(lockName string) (bool, error) {
+	var result bool
 	err := tx.QueryRow("SELECT RELEASE_LOCK(?)", lockName).Scan(&result)
 	if err != nil {
-		return -1, fmt.Errorf("failed to release lock: %w", err)
+		return false, fmt.Errorf("failed to release lock: %w", err)
 	}
-	return int(result.Int64), nil
+	return result, nil
 }
 
 // GetCurrentConnectionID は現在の接続のセッションIDを取得する
