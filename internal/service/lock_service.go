@@ -148,8 +148,10 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 		fmt.Printf("[%s] Inserted new product with quantity: %d\n", id, addQuantity)
 	}
 
-	// １秒まつ
-	time.Sleep(1 * time.Second)
+	// トランザクションをコミット
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
 
 	// ロックを解放
 	result, err = lockTx.ReleaseNamedLock(productCode)
@@ -161,11 +163,6 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 	}
 
 	fmt.Printf("[%s] Lock released\n", id)
-
-	// トランザクションをコミット
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
 
 	fmt.Printf("[%s] Transaction committed\n", id)
 
