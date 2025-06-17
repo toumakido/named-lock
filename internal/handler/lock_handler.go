@@ -108,7 +108,7 @@ func (h *LockHandler) AcquireHoldReleaseLock(c echo.Context) error {
 }
 
 // AcquireProcessReleaseLock はロックを取得し、処理し、解放するハンドラ
-func (h *LockHandler) AcquireProcessReleaseLock(c echo.Context) error {
+func (h *LockHandler) AcquireProductReleaseLock(c echo.Context) error {
 	var req AcquireProcessReleaseRequest
 	if err := c.Bind(&req); err != nil {
 		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
@@ -120,7 +120,7 @@ func (h *LockHandler) AcquireProcessReleaseLock(c echo.Context) error {
 	}
 
 	// ロックを取得し、処理し、解放する
-	err := h.lockService.AcquireProcessReleaseLock(c.Request().Context(), req.ProductCode, req.Quantity, req.Timeout)
+	err := h.lockService.AcquireProductReleaseLock(c.Request().Context(), req.ProductCode, req.Quantity, req.Timeout)
 	if err != nil {
 		// エラーが発生した場合でも、LockResponse形式でレスポンスを返す
 		response := LockResponse{
@@ -143,5 +143,5 @@ func (h *LockHandler) AcquireProcessReleaseLock(c echo.Context) error {
 func (h *LockHandler) RegisterRoutes(e *echo.Echo) {
 	e.GET("/api/session", h.GetCurrentSession)
 	e.POST("/api/locks/hold-and-release", h.AcquireHoldReleaseLock)
-	e.POST("/api/locks/process", h.AcquireProcessReleaseLock)
+	e.POST("/api/locks/process", h.AcquireProductReleaseLock)
 }

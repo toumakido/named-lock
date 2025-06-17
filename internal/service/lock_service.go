@@ -93,10 +93,10 @@ func (s *LockService) AcquireHoldReleaseLock(ctx context.Context, lockName strin
 	return sessionID, nil
 }
 
-// AcquireProcessReleaseLock はロックを取得し、処理後、解放する
+// AcquireProductReleaseLock はロックを取得し、在庫を更新後、解放する
 // ロックの取得と解放の間にトランザクションを張る
 // 商品在庫を増やす処理を行う
-func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode string, addQuantity int, timeout int) error {
+func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode string, addQuantity int, timeout int) error {
 	id := uuid.New().String()
 
 	// トランザクションを開始
@@ -153,6 +153,63 @@ func (s *LockService) AcquireProcessReleaseLock(ctx context.Context, productCode
 
 	// ロックを解放
 	result, err = tx.ReleaseNamedLock(productCode)
+	if err != nil {
+		return fmt.Errorf("failed to release lock: %w", err)
+	}
+	if !result {
+		return fmt.Errorf("failed to release lock: result %v", result)
+	}
+
+	fmt.Printf("[%s] Lock released\n", id)
+
+	// トランザクションをコミット
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	fmt.Printf("[%s] Transaction committed\n", id)
+
+	return nil
+}
+
+// AcquireOrderReleaseLock はロックを取得し、注文を挿入後、共通コードで取得して解放する
+// ロックの取得と解放の間にトランザクションを張る
+func (s *LockService) AcquireOrderReleaseLock(ctx context.Context, code string, timeout int) error {
+	id := uuid.New().String()
+
+	// トランザクションを開始
+	tx, err := s.db.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// ロックを取得
+	result, err := tx.GetNamedLock(code, timeout)
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	// ロック取得に失敗した場合
+	if !result {
+		return fmt.Errorf("failed to acquire lock: result %v", result)
+	}
+
+	newOrder := &db.Order{
+		ID:   id,
+		Code: code,
+	}
+	if err := tx.InsertOrder(newOrder); err != nil {
+		return fmt.Errorf("failed to insert order: %w", err)
+	}
+	orders, err := s.db.ListOrderByCode(code)
+	if err != nil {
+		return fmt.Errorf("failed to list orders: %w", err)
+	}
+
+	fmt.Printf("[%s] Inserted new order with ID: %s, Code: %s, Total Orders: %d\n", id, newOrder.ID, newOrder.Code, len(orders))
+
+	// ロックを解放
+	result, err = tx.ReleaseNamedLock(code)
 	if err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}
