@@ -100,7 +100,7 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 	id := uuid.New().String()
 
 	// ロックを取得
-	lockTx, result, err := s.db.GetNamedLock(productCode, timeout)
+	conn, result, err := s.db.GetNamedLock(ctx, productCode, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
@@ -108,6 +108,7 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 	if !result {
 		return fmt.Errorf("failed to acquire lock: result %v", result)
 	}
+	defer conn.Close()
 
 	// トランザクションを開始
 	tx, err := s.db.BeginTx(ctx)
@@ -121,6 +122,7 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 	if err != nil {
 		return fmt.Errorf("failed to get product: %w", err)
 	}
+	time.Sleep(1 * time.Second)
 
 	// 在庫情報が存在する場合は更新、存在しない場合は挿入
 	if product != nil {
@@ -154,7 +156,7 @@ func (s *LockService) AcquireProductReleaseLock(ctx context.Context, productCode
 	}
 
 	// ロックを解放
-	result, err = lockTx.ReleaseNamedLock(productCode)
+	result, err = conn.ReleaseNamedLock(ctx, productCode)
 	if err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}
@@ -175,7 +177,7 @@ func (s *LockService) AcquireOrderReleaseLock(ctx context.Context, code string, 
 	id := uuid.New().String()
 
 	// ロックを取得
-	lockTx, result, err := s.db.GetNamedLock(code, timeout)
+	conn, result, err := s.db.GetNamedLock(ctx, code, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
@@ -183,7 +185,7 @@ func (s *LockService) AcquireOrderReleaseLock(ctx context.Context, code string, 
 	if !result {
 		return fmt.Errorf("failed to acquire lock: result %v", result)
 	}
-	defer lockTx.Rollback()
+	defer conn.Close()
 
 	// トランザクションを開始
 	tx, err := s.db.BeginTx(ctx)
@@ -207,7 +209,7 @@ func (s *LockService) AcquireOrderReleaseLock(ctx context.Context, code string, 
 	fmt.Printf("[%s] Inserted new order with ID: %s, Code: %s, Total Orders: %d\n", id, newOrder.ID, newOrder.Code, len(orders))
 
 	// ロックを解放
-	result, err = lockTx.ReleaseNamedLock(code)
+	result, err = conn.ReleaseNamedLock(ctx, code)
 	if err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
 	}

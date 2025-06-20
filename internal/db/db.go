@@ -20,6 +20,11 @@ type Tx struct {
 	*sql.Tx
 }
 
+// Conn はデータベース接続を表す構造体
+type Conn struct {
+	*sql.Conn
+}
+
 // NewDB は新しいDBインスタンスを作成する
 func NewDB(cfg *config.DBConfig) (*DB, error) {
 	db, err := sql.Open(cfg.Driver, cfg.GetDSN())
@@ -55,17 +60,17 @@ func (db *DB) GetCurrentConnectionID() (int64, error) {
 // lockName: ロック名
 // timeout: タイムアウト（秒）
 // 戻り値: 1=ロック取得成功, 0=ロック取得失敗, error=エラー
-func (db *DB) GetNamedLock(lockName string, timeout int) (*Tx, bool, error) {
-	tx, err := db.BeginTx(context.Background())
+func (db *DB) GetNamedLock(ctx context.Context, lockName string, timeout int) (*Conn, bool, error) {
+	conn, err := db.Conn(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	var result bool
-	err = tx.QueryRow("SELECT GET_LOCK(?, ?)", lockName, timeout).Scan(&result)
+	err = conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, ?)", lockName, timeout).Scan(&result)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get lock: %w", err)
 	}
-	return tx, result, nil
+	return &Conn{Conn: conn}, result, nil
 }
 
 // BeginTx はトランザクションを開始する
@@ -87,6 +92,18 @@ func (tx *Tx) GetNamedLock(lockName string, timeout int) (bool, error) {
 	err := tx.QueryRow("SELECT GET_LOCK(?, ?)", lockName, timeout).Scan(&result)
 	if err != nil {
 		return false, fmt.Errorf("failed to get lock: %w", err)
+	}
+	return result, nil
+}
+
+// ReleaseNamedLock は名前付きロックを解放する
+// lockName: ロック名
+// 戻り値: 1=ロック解放成功, 0=ロックが存在しないか他のセッションが所有, error=エラー
+func (conn *Conn) ReleaseNamedLock(ctx context.Context, lockName string) (bool, error) {
+	var result bool
+	err := conn.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?)", lockName).Scan(&result)
+	if err != nil {
+		return false, fmt.Errorf("failed to release lock: %w", err)
 	}
 	return result, nil
 }
